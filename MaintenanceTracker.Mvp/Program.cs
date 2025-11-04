@@ -4,6 +4,8 @@ using MaintenanceTracker.Mvp.Data;
 using MaintenanceTracker.Mvp.Domain;
 using Microsoft.EntityFrameworkCore;
 
+// Random comment
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Blazor Web App (.NET 8) hosting model
