@@ -4,7 +4,7 @@ using MaintenanceTracker.Mvp.Data;
 using MaintenanceTracker.Mvp.Domain;
 using Microsoft.EntityFrameworkCore;
 
-// Random comment
+// Random comment x2
 
 var builder = WebApplication.CreateBuilder(args);
 
