@@ -1,0 +1,128 @@
+﻿@page "/workorders"
+@rendermode InteractiveServer
+@inject AppDbContext Db
+
+
+
+<h3>Work Orders</h3>
+
+<div class="mb-3">
+    <EditForm Model="createModel" OnValidSubmit="CreateAsync" FormName="create-wo">
+        <AntiforgeryToken />
+        <DataAnnotationsValidator />
+        <div class="row g-2">
+            <div class="col-3">
+                <InputSelect class="form-select"
+                             @bind-Value="createModel.AssetId"
+                             TValue="Guid">
+                    <option value="@Guid.Empty">-- Select Asset --</option>
+                    @foreach (var a in assets)
+                    {
+                        <option value="@a.Id">@a.Name</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-4"><InputText class="form-control" @bind-Value="createModel.Title" placeholder="Title" /></div>
+            <div class="col-2">
+                <InputSelect class="form-select" @bind-Value="createModel.Priority">
+                    @foreach (Priority p in Enum.GetValues(typeof(Priority)))
+                    {
+                        <option value="@p">@p</option>
+                    }
+                </InputSelect>
+            </div>
+            <div class="col-2"><InputDate DateParsingErrorMessage="Invalid date" class="form-control" @bind-Value="createModel.ScheduledDate" /></div>
+            <div class="col-1"><button class="btn btn-primary w-100" type="submit">Add</button></div>
+        </div>
+    </EditForm>
+</div>
+
+<table class="table table-striped">
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Asset</th>
+            <th>Priority</th>
+            <th>Status</th>
+            <th>Scheduled</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var w in items)
+        {
+            <tr>
+                <td>@w.Title</td>
+                <td>@w.Asset?.Name</td>
+                <td>@w.Priority</td>
+                <td>@w.Status</td>
+                <td>@(w.ScheduledDate?.ToString() ?? "-")</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-secondary me-1" @onclick="() => UpdateStatus(w, WorkOrderStatus.InProgress)">→ InProgress</button>
+                    <button class="btn btn-sm btn-outline-warning me-1" @onclick="() => UpdateStatus(w, WorkOrderStatus.QA)">→ QA</button>
+                    <button class="btn btn-sm btn-outline-success" @onclick="() => UpdateStatus(w, WorkOrderStatus.Closed)">→ Closed</button>
+                </td>
+            </tr>
+        }
+    </tbody>
+</table>
+
+@code {
+private List<Asset> assets = new();
+private List<WorkOrder> items = new();
+
+
+private CreateVm createModel = new();
+
+
+protected override async Task OnInitializedAsync()
+{
+assets = await Db.Assets.OrderBy(a => a.Name).ToListAsync();
+items = await Db.WorkOrders.Include(w => w.Asset).OrderByDescending(w => w.CreatedUtc).ToListAsync();
+}
+
+
+private async Task CreateAsync()
+{
+if (createModel.AssetId == Guid.Empty || string.IsNullOrWhiteSpace(createModel.Title)) return;
+var wo = new WorkOrder
+{
+AssetId = createModel.AssetId,
+Title = createModel.Title,
+Priority = createModel.Priority,
+ScheduledDate = createModel.ScheduledDate
+};
+Db.WorkOrders.Add(wo);
+await Db.SaveChangesAsync();
+items.Insert(0, await Db.WorkOrders.Include(w => w.Asset).FirstAsync(x => x.Id == wo.Id));
+createModel = new();
+StateHasChanged();
+}
+
+    private async Task UpdateStatus(WorkOrder w, WorkOrderStatus newStatus)
+    {
+        // mirror the minimal API rule (only forward transitions)
+        bool valid = (w.Status, newStatus) switch
+        {
+            (WorkOrderStatus.New, WorkOrderStatus.InProgress) => true,
+            (WorkOrderStatus.InProgress, WorkOrderStatus.QA) => true,
+            (WorkOrderStatus.QA, WorkOrderStatus.Closed) => true,
+            _ => false
+        };
+        if (!valid) return;
+        w.Status = newStatus;
+        if (newStatus == WorkOrderStatus.Closed)
+            w.CompletedDate = DateOnly.FromDateTime(DateTime.UtcNow);
+        await Db.SaveChangesAsync();
+        StateHasChanged();
+    }
+
+
+    private sealed class CreateVm
+    {
+        public Guid AssetId { get; set; }
+        public string Title { get; set; } = string.Empty;
+        public Priority Priority { get; set; } = Priority.Medium;
+        public DateOnly? ScheduledDate { get; set; }
+    }
+}

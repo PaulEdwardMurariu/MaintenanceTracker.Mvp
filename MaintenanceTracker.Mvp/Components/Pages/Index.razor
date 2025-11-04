@@ -1,0 +1,36 @@
+﻿@page "/"
+@inject AppDbContext Db
+
+
+<h3>Maintenance Dashboard</h3>
+@if (kpis is null)
+{
+    <p>Loading…</p>
+}
+else
+{
+    <div class="row">
+        <div class="col"><div class="card p-3"><b>Open WOs</b><div>@kpis.Open</div></div></div>
+        <div class="col"><div class="card p-3"><b>In Progress</b><div>@kpis.InProgress</div></div></div>
+        <div class="col"><div class="card p-3"><b>Overdue</b><div>@kpis.Overdue</div></div></div>
+    </div>
+}
+
+@code {
+    private Kpis? kpis;
+
+
+    protected override async Task OnInitializedAsync()
+    {
+        var today = DateOnly.FromDateTime(DateTime.Today);
+        kpis = new Kpis
+        {
+            Open = await Db.WorkOrders.CountAsync(w => w.Status == WorkOrderStatus.New),
+            InProgress = await Db.WorkOrders.CountAsync(w => w.Status == WorkOrderStatus.InProgress),
+            Overdue = await Db.WorkOrders.CountAsync(w => w.ScheduledDate != null && w.ScheduledDate < today && w.Status != WorkOrderStatus.Closed)
+        };
+    }
+
+
+    private sealed class Kpis { public int Open { get; set; } public int InProgress { get; set; } public int Overdue { get; set; } }
+}
